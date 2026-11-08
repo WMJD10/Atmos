@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wmjd10.github.io/Atmos/sitemap.xml

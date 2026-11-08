@@ -1,9 +1,8 @@
-const CACHE_NAME = "atmos-static-v1.1";
+const CACHE_NAME = "atmos-static-v2.0";
 
 const APP_FILES = [
    "./index.html",
    "./style.css",
-   "./JS/data.js",
    "./JS/api.js",
    "./JS/app.js",
    "./data/world-cities.csv"

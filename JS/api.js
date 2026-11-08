@@ -31,7 +31,6 @@ function getCurrentWeather(data) {
       feelsLike: current.apparent_temperature,
       humidity: current.relative_humidity_2m,
       windSpeed: current.wind_speed_10m,
-      weatherCode: current.weather_code,
       isDay: current.is_day,
       condition: getWeatherCondition(current.weather_code),
       icon: getWeatherIcon(current.weather_code, current.is_day),
@@ -320,24 +319,62 @@ function getHourlyForecast(data) {
 const defaultLocation = {
    name: "Erbil",
    country: "Iraq",
-   latitude: 36.2312,
-   longitude: 43.9926
+   latitude: 36.19117,
+   longitude: 44.00943
 };
+
+let storageWarningPending = false;
+
+function readStoredValue(key) {
+   try {
+      return localStorage.getItem(key);
+   } catch (error) {
+      storageWarningPending = true;
+      console.warn("Browser storage is unavailable:", error);
+      window.atmosStorageNotice?.();
+      return null;
+   }
+}
+
+function writeStoredValue(key, value) {
+   try {
+      localStorage.setItem(key, value);
+      return true;
+   } catch (error) {
+      storageWarningPending = true;
+      console.warn("Could not save data in browser storage:", error);
+      window.atmosStorageNotice?.();
+      return false;
+   }
+}
 
 let savedLocation = null;
 
 try {
-   savedLocation = JSON.parse(
-      localStorage.getItem("atmos-location")
-   );
+   savedLocation = JSON.parse(readStoredValue("atmos-location"));
 } catch (error) {
-   console.error("Failed to read saved location:", error);
+   console.warn("Saved location data is invalid:", error);
+}
+
+if (
+   savedLocation?.name?.toLowerCase() === "erbil" &&
+   ["iq", "iraq"].includes(savedLocation.country?.toLowerCase())
+) {
+   savedLocation = {
+      ...savedLocation,
+      ...defaultLocation,
+      timezone: savedLocation.timezone ?? "Asia/Baghdad",
+   };
 }
 
 let weatherRequestId = 0;
+let weatherData = null;
 
-async function loadCityWeather(location) {
+async function loadCityWeather(location, { persistLocation = true } = {}) {
    const requestId = ++weatherRequestId;
+
+   activeLocation = location;
+   window.atmosStatus?.showLoading();
 
    try {
       const data = await getWeatherData(
@@ -347,32 +384,30 @@ async function loadCityWeather(location) {
 
       // Ignore outdated requests or failed responses.
       if (!data || requestId !== weatherRequestId) {
+         if (requestId === weatherRequestId) {
+            window.atmosStatus?.showError();
+         }
          return;
       }
 
       weatherData = buildWeatherData(data, location);
 
-      localStorage.setItem(
-         "atmos-location",
-         JSON.stringify(location)
-      );
+      if (persistLocation) {
+         writeStoredValue(
+            "atmos-location",
+            JSON.stringify(location)
+         );
+      }
 
       updateWeatherDate();
       setUnit(currentUnit);
+      window.atmosFavorites?.refresh();
+      window.atmosStatus?.hide();
    } catch (error) {
       console.error("Failed to load city weather:", error);
+      window.atmosStatus?.showError();
    }
 }
 
 const initialLocation = savedLocation ?? defaultLocation;
-
-getWeatherData(
-   initialLocation.latitude,
-   initialLocation.longitude
-).then(data => {
-   if (data) {
-      weatherData = buildWeatherData(data, initialLocation);
-   }
-
-   setUnit(currentUnit);
-});
+let activeLocation = initialLocation;
